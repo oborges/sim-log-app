@@ -6,6 +6,8 @@
   "scripts": {
     "start": "node index.js"
   },
-  "dependencies": {}
+  "dependencies": {
+    "@elastic/elasticsearch": "^8.15.0"
+  }
 }
 
