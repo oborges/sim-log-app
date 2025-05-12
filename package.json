@@ -7,7 +7,6 @@
     "start": "node index.js"
   },
   "dependencies": {
-    "@elastic/elasticsearch": "^8.15.0"
+    "@elastic/elasticsearch": "^8.18.2"
   }
 }
-
