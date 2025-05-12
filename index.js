@@ -1,78 +1,63 @@
-// index.js
+// arquivo: index.js
 
 const { Client } = require('@elastic/elasticsearch');
-const fs         = require('fs');
-const path       = require('path');
+const fs = require('fs');
+const path = require('path');
+
+// Configurações via ambiente ou arquivo montado
+const ES_HOST = process.env.ES_HOST || '4f41b27c-c2f9-48a2-b9a8-d0d71c60007f.c38qvnlz04atmdpus310.databases.appdomain.cloud';
+const ES_PORT = process.env.ES_PORT || '32169';
+const ES_USER = fs.readFileSync(path.join(__dirname, 'config/es/credentials/username'), 'utf8').trim();
+const ES_PASS = fs.readFileSync(path.join(__dirname, 'config/es/credentials/password'), 'utf8').trim();
+
+// Desabilita checagem de certificado (apenas para troubleshooting)
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+
+const ES_URL = `https://${ES_HOST}:${ES_PORT}`;
+
+// Instancia o client do Elasticsearch
+const client = new Client({
+  node: ES_URL,
+  auth: { username: ES_USER, password: ES_PASS },
+});
 
 // Lista de nomes brasileiros
-const users = [
-  'Ana', 'Bruno', 'Carla', 'Daniel', 'Eduardo', 'Fernanda',
-  'Gabriel', 'Helena', 'Igor', 'Juliana', 'Lucas', 'Mariana',
-  'Neto', 'Patrícia', 'Rafael', 'Sofia', 'Tiago', 'Vanessa',
-  'Wesley', 'Yasmin', 'Zeca'
-];
-
+const users = ['Ana', 'Bruno', 'Carla', 'Daniel', 'Eduardo', 'Fernanda', 'Gabriel', 'Helena', 'Igor', 'Juliana', 'Lucas', 'Mariana', 'Neto', 'Patrícia', 'Rafael', 'Sofia', 'Tiago', 'Vanessa', 'Wesley', 'Yasmin', 'Zeca'];
 // Ações possíveis
-const actions = [
-  'transferencia', 'saque', 'consultaSaldo', 'consultaChavePix'
-];
+const actions = ['transferencia', 'saque', 'consultaSaldo', 'consultaChavePix'];
 
 function randomItem(arr) {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
-// --- read Elasticsearch credentials & CA from mounted secrets ---
-const ES_URL  = process.env.ES_URL || 'https://your-host:your-port'; 
-// mounts: /opt/app-root/src/config/es/credentials/{username,password}
-const credDir = path.join(__dirname, 'config/es/credentials');
-const CA_PATH = path.join(__dirname, 'config/es/ca/ca.crt');
-
-const ES_USER = fs.readFileSync(path.join(credDir, 'username'), 'utf8').trim();
-const ES_PASS = fs.readFileSync(path.join(credDir, 'password'), 'utf8').trim();
-
-// build Elasticsearch client
-const client = new Client({
-  node: ES_URL,
-  auth: {
-    username: ES_USER,
-    password: ES_PASS
-  },
-  tls: {
-    ca: fs.readFileSync(CA_PATH),
-    // if you want to strictly verify, set to true and ensure CA is correct
-    rejectUnauthorized: false
-  }
-});
-
-async function logAction() {
+async function sendAndVerify() {
   const entry = {
-    usuario:   randomItem(users),
-    acao:      randomItem(actions),
+    usuario: randomItem(users),
+    acao: randomItem(actions),
     timestamp: new Date().toISOString()
   };
 
   try {
-    // index the new document into "app-logs"
-    const indexResp = await client.index({
-      index:    'app-logs',
-      document: entry
-    });
-
-    // immediately fetch it back to verify/store in stdout
-    const getResp = await client.get({
+    // Indexa o documento
+    const indexRes = await client.index({
       index: 'app-logs',
-      id:    indexResp._id
+      body: entry,
+      refresh: 'wait_for'
     });
 
-    console.log('✅ sent & got:', JSON.stringify(getResp._source));
-  }
-  catch (err) {
-    console.error('⛔️ Elasticsearch error:', err.message);
-    console.log('🔄 Original entry:', JSON.stringify(entry));
+    const docId = indexRes.body._id;
+    console.log(`✅ Sent to ES, id=${docId}`);
+
+    // Busca o mesmo documento
+    const getRes = await client.get({ index: 'app-logs', id: docId });
+    console.log('🔍 Fetched from ES:', getRes.body._source);
+  } catch (err) {
+    console.error('⛔️ Elasticsearch error:', err.message || err);
+    console.error('🔄 Original entry:', entry);
   }
 }
 
-// initial run & schedule every 30 seconds
-logAction();
-setInterval(logAction, 30 * 1000);
+// Executa imediatamente e depois a cada 30s
+sendAndVerify();
+setInterval(sendAndVerify, 30 * 1000);
 
