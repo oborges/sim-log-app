@@ -35,28 +35,32 @@ async function logAction() {
   };
 
   try {
-    // index & wait for refresh
+    // index & wait for it to be searchable
     const resp = await client.index({
       index: INDEX_NAME,
       body:  entry,
       refresh: 'wait_for'
     });
 
-    // dump the raw body so we can see what's in it
-    console.log('ℹ️ index response body:', JSON.stringify(resp.body, null, 2));
+    // dump entire resp so we can find where the _id is hiding
+    console.log('ℹ️ full index response:', JSON.stringify(resp, null, 2));
 
-    const docId = resp.body && resp.body._id;
+    // try both places
+    const docId = (resp.body && resp.body._id)
+                || resp._id
+                || (resp.body && resp.body.id)
+                || ((resp.body || {}).result === 'created' && resp.body._id); 
+
     if (!docId) {
-      throw new Error('no _id in index response');
+      throw new Error('no document ID found in index response');
     }
+    console.log(`✅ Indexed with id=${docId}`);
 
-    console.log(`✅ Indexed, id=${docId}`);
-
+    // now retrieve it
     const got = await client.get({
       index: INDEX_NAME,
       id:    docId
     });
-
     console.log('🔍 Fetched:', got.body && got.body._source);
 
   } catch (err) {
