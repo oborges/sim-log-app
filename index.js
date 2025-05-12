@@ -1,63 +1,78 @@
 // index.js
 
 const { Client } = require('@elastic/elasticsearch');
-const fs = require('fs');
-const path = require('path');
+const fs         = require('fs');
+const path       = require('path');
 
-// configuration via env vars (or file paths)
-const ES_HOST = process.env.ES_HOST;
-const ES_PORT = process.env.ES_PORT || '9200';
-const ES_USER = process.env.ES_USER;
-const ES_PASS = process.env.ES_PASS;
-const ES_CA_PATH = process.env.ES_CA_PATH; // e.g. "/opt/app-root/src/config/es/ca.crt"
+// Lista de nomes brasileiros
+const users = [
+  'Ana', 'Bruno', 'Carla', 'Daniel', 'Eduardo', 'Fernanda',
+  'Gabriel', 'Helena', 'Igor', 'Juliana', 'Lucas', 'Mariana',
+  'Neto', 'Patrícia', 'Rafael', 'Sofia', 'Tiago', 'Vanessa',
+  'Wesley', 'Yasmin', 'Zeca'
+];
 
-// build the client
-const client = new Client({
-  node: `https://${ES_HOST}:${ES_PORT}`,
-  auth: { username: ES_USER, password: ES_PASS },
-  tls: ES_CA_PATH
-    ? { ca: fs.readFileSync(path.resolve(ES_CA_PATH)) }
-    : undefined
-});
-
-// your log-generator boilerplate
-theExamUsers = ['Ana','Bruno','Carla','Daniel','Eduardo','Fernanda','Gabriel','Helena','Igor','Juliana','Lucas','Mariana','Neto','Patrícia','Rafael','Sofia','Tiago','Vanessa','Wesley','Yasmin','Zeca'];
-const actions = ['transferencia','saque','consultaSaldo','consultaChavePix'];
+// Ações possíveis
+const actions = [
+  'transferencia', 'saque', 'consultaSaldo', 'consultaChavePix'
+];
 
 function randomItem(arr) {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
+// --- read Elasticsearch credentials & CA from mounted secrets ---
+const ES_URL  = process.env.ES_URL || 'https://your-host:your-port'; 
+// mounts: /opt/app-root/src/config/es/credentials/{username,password}
+const credDir = path.join(__dirname, 'config/es/credentials');
+const CA_PATH = path.join(__dirname, 'config/es/ca/ca.crt');
+
+const ES_USER = fs.readFileSync(path.join(credDir, 'username'), 'utf8').trim();
+const ES_PASS = fs.readFileSync(path.join(credDir, 'password'), 'utf8').trim();
+
+// build Elasticsearch client
+const client = new Client({
+  node: ES_URL,
+  auth: {
+    username: ES_USER,
+    password: ES_PASS
+  },
+  tls: {
+    ca: fs.readFileSync(CA_PATH),
+    // if you want to strictly verify, set to true and ensure CA is correct
+    rejectUnauthorized: false
+  }
+});
+
 async function logAction() {
   const entry = {
-    usuario:   randomItem(theExamUsers),
+    usuario:   randomItem(users),
     acao:      randomItem(actions),
     timestamp: new Date().toISOString()
   };
 
   try {
-    // push into ES index "app-logs"
+    // index the new document into "app-logs"
     const indexResp = await client.index({
-      index: 'app-logs',
-      body:  entry
+      index:    'app-logs',
+      document: entry
     });
 
-    // immediately fetch the just-indexed document by ID
-    const { _index, _id } = indexResp;
-    const getResp = await client.get({ index: _index, id: _id });
+    // immediately fetch it back to verify/store in stdout
+    const getResp = await client.get({
+      index: 'app-logs',
+      id:    indexResp._id
+    });
 
-    // print the fetched document
-    console.log('✅ Indexed and retrieved:', JSON.stringify(getResp._source));
-  } catch (err) {
-    // on any ES error, dump to stderr but still keep going
-    console.error('⛔️ Elasticsearch error:', err.message || err);
+    console.log('✅ sent & got:', JSON.stringify(getResp._source));
   }
-
-  // always print the original entry to stdout for fallback
-  console.log('🔄 Original entry:', JSON.stringify(entry));
+  catch (err) {
+    console.error('⛔️ Elasticsearch error:', err.message);
+    console.log('🔄 Original entry:', JSON.stringify(entry));
+  }
 }
 
-// initial + every 30s
+// initial run & schedule every 30 seconds
 logAction();
 setInterval(logAction, 30 * 1000);
 
