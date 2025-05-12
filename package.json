@@ -1,0 +1,13 @@
+{
+  "name": "sim-log-app",
+  "version": "1.0.0",
+  "description": "Simula logs de usuário a cada 10s",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "faker": "^6.6.6"
+  }
+}
+
