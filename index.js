@@ -35,26 +35,25 @@ async function logAction() {
   };
 
   try {
-    // Index and force refresh so it’s searchable immediately
+    // Index and immediately refresh
     const indexResp = await client.index({
       index: INDEX_NAME,
       body:  entry,
       refresh: 'wait_for'
     });
-
     console.log('ℹ️ full index response:', JSON.stringify(indexResp, null, 2));
 
     const docId = indexResp._id;
     console.log(`✅ Indexed with id=${docId}`);
 
-    // Now GET the document back
+    // Fetch it back
     const getResp = await client.get({ index: INDEX_NAME, id: docId });
     console.log('ℹ️ full get response:', JSON.stringify(getResp, null, 2));
 
-    if (getResp.body && getResp.body.found) {
-      console.log('🔍 Fetched _source:', getResp.body._source);
+    if (getResp.found && getResp._source) {
+      console.log('🔍 Fetched _source:', getResp._source);
     } else {
-      console.warn('⚠️ Document not found or no body._source');
+      console.warn('⚠️ Document not found or no _source');
     }
 
   } catch (err) {
