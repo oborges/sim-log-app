@@ -21,7 +21,7 @@ const client = new Client({
 });
 
 // your log-generator boilerplate
-const users   = ['Ana','Bruno','Carla','Daniel','Eduardo','Fernanda','Gabriel','Helena','Igor','Juliana','Lucas','Mariana','Neto','Patrícia','Rafael','Sofia','Tiago','Vanessa','Wesley','Yasmin','Zeca'];
+theExamUsers = ['Ana','Bruno','Carla','Daniel','Eduardo','Fernanda','Gabriel','Helena','Igor','Juliana','Lucas','Mariana','Neto','Patrícia','Rafael','Sofia','Tiago','Vanessa','Wesley','Yasmin','Zeca'];
 const actions = ['transferencia','saque','consultaSaldo','consultaChavePix'];
 
 function randomItem(arr) {
@@ -30,28 +30,34 @@ function randomItem(arr) {
 
 async function logAction() {
   const entry = {
-    usuario:   randomItem(users),
+    usuario:   randomItem(theExamUsers),
     acao:      randomItem(actions),
     timestamp: new Date().toISOString()
   };
 
   try {
     // push into ES index "app-logs"
-    await client.index({
+    const indexResp = await client.index({
       index: 'app-logs',
       body:  entry
     });
-    // you can optionally await client.indices.refresh({ index: 'app-logs' });
+
+    // immediately fetch the just-indexed document by ID
+    const { _index, _id } = indexResp;
+    const getResp = await client.get({ index: _index, id: _id });
+
+    // print the fetched document
+    console.log('✅ Indexed and retrieved:', JSON.stringify(getResp._source));
   } catch (err) {
     // on any ES error, dump to stderr but still keep going
     console.error('⛔️ Elasticsearch error:', err.message || err);
   }
 
-  // always print to stdout as JSON for your existing logging pipeline
-  console.log(JSON.stringify(entry));
+  // always print the original entry to stdout for fallback
+  console.log('🔄 Original entry:', JSON.stringify(entry));
 }
 
-// initial + every 10s
+// initial + every 30s
 logAction();
-setInterval(logAction, 10_000);
+setInterval(logAction, 30 * 1000);
 
